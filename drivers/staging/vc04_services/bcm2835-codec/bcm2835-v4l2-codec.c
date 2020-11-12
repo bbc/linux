@@ -2028,7 +2028,7 @@ static int bcm2835_codec_create_component(struct bcm2835_codec_ctx *ctx)
 				      MMAL_PARAMETER_ZERO_COPY, &enable,
 				      sizeof(enable));
 
-	if (role == DECODE) {
+	if (dev->role == DECODE) {
 		/*
 		 * Disable firmware option that ensures decoded timestamps
 		 * always increase.
