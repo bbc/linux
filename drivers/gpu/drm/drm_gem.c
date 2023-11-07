@@ -1113,8 +1113,8 @@ int drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	ret = drm_gem_mmap_obj(obj, drm_vma_node_size(node) << PAGE_SHIFT,
 			       vma);
-
-	drm_gem_object_put(obj);
+	if (kref_read(&obj->refcount) > 1)
+		drm_gem_object_put(obj);
 
 	return ret;
 }

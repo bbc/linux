@@ -43,6 +43,7 @@
 
 #include "vc4_drv.h"
 #include "vc4_regs.h"
+#include "../v3d/v3d_vc4_bind.h"
 
 #define DRIVER_NAME "vc4"
 #define DRIVER_DESC "Broadcom VC4 graphics"
@@ -50,6 +51,11 @@
 #define DRIVER_MAJOR 0
 #define DRIVER_MINOR 0
 #define DRIVER_PATCHLEVEL 0
+
+struct drm_device *vc4_drm = NULL;
+EXPORT_SYMBOL(vc4_drm);
+struct drm_file *vc4_drm_file = NULL;
+EXPORT_SYMBOL(vc4_drm_file);
 
 /* Helper function for mapping the regs on a platform device. */
 void __iomem *vc4_ioremap_regs(struct platform_device *dev, int index)
@@ -100,10 +106,10 @@ static int vc4_get_param_ioctl(struct drm_device *dev, void *data,
 
 	if (args->pad != 0)
 		return -EINVAL;
-
+#ifndef CONFIG_DRM_V3D
 	if (WARN_ON_ONCE(vc4->is_vc5))
 		return -ENODEV;
-
+#endif
 	if (!vc4->v3d)
 		return -ENODEV;
 
@@ -149,17 +155,23 @@ static int vc4_open(struct drm_device *dev, struct drm_file *file)
 {
 	struct vc4_dev *vc4 = to_vc4_dev(dev);
 	struct vc4_file *vc4file;
-
+#ifndef CONFIG_DRM_V3D
 	if (WARN_ON_ONCE(vc4->is_vc5))
 		return -ENODEV;
-
+#endif
 	vc4file = kzalloc(sizeof(*vc4file), GFP_KERNEL);
 	if (!vc4file)
 		return -ENOMEM;
 	vc4file->dev = vc4;
-
+#ifndef CONFIG_DRM_V3D
 	vc4_perfmon_open_file(vc4file);
+#endif
 	file->driver_priv = vc4file;
+	if (file->minor->type == DRM_MINOR_PRIMARY) {
+		/* save the stable drm_file for v3d */
+		if (!vc4_drm_file)
+			vc4_drm_file = file;
+	}
 	return 0;
 }
 
@@ -167,14 +179,19 @@ static void vc4_close(struct drm_device *dev, struct drm_file *file)
 {
 	struct vc4_dev *vc4 = to_vc4_dev(dev);
 	struct vc4_file *vc4file = file->driver_priv;
-
+#ifndef CONFIG_DRM_V3D
 	if (WARN_ON_ONCE(vc4->is_vc5))
 		return;
-
+#endif
 	if (vc4file->bin_bo_used)
 		vc4_v3d_bin_bo_put(vc4);
-
+#ifndef CONFIG_DRM_V3D
 	vc4_perfmon_close_file(vc4file);
+#endif
+	if (file->minor->type == DRM_MINOR_PRIMARY) {
+		if (file == vc4_drm_file)
+			vc4_drm_file = NULL;
+	}
 	kfree(vc4file);
 }
 
@@ -229,16 +246,24 @@ static const struct drm_driver vc4_drm_driver = {
 };
 
 static const struct drm_driver vc5_drm_driver = {
+	.open = vc4_open,
+	.postclose = vc4_close,
 	.driver_features = (DRIVER_MODESET |
 			    DRIVER_ATOMIC |
+				DRIVER_RENDER |
 			    DRIVER_GEM),
 
 #if defined(CONFIG_DEBUG_FS)
 	.debugfs_init = vc4_debugfs_init,
 #endif
+	.gem_create_object = vc4_create_object,
+	.gem_prime_mmap = drm_gem_prime_mmap,
+	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
+	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
 
-	DRM_GEM_CMA_DRIVER_OPS_WITH_DUMB_CREATE(vc4_dumb_create),
-
+	DRM_GEM_CMA_DRIVER_OPS_WITH_DUMB_CREATE(vc4_bo_dumb_create),
+	.ioctls = vc4_drm_ioctls,
+	.num_ioctls = ARRAY_SIZE(vc4_drm_ioctls),
 	.fops = &vc4_drm_fops,
 
 	.name = DRIVER_NAME,
@@ -326,11 +351,14 @@ static int vc4_drm_bind(struct device *dev)
 	node = of_find_matching_node_and_match(NULL, vc4_dma_range_matches,
 					       NULL);
 	if (node) {
+    	pr_info("vc4 dma node name:%s(%s)\n", node->full_name, node->name);
 		ret = of_dma_configure(dev, node, true);
 		of_node_put(node);
 
 		if (ret)
 			return ret;
+	} else {
+		pr_info("vc4 dma no node configure\n");
 	}
 
 	vc4 = devm_drm_dev_alloc(dev, driver, struct vc4_dev, base);
@@ -343,7 +371,9 @@ static int vc4_drm_bind(struct device *dev)
 	platform_set_drvdata(pdev, drm);
 	INIT_LIST_HEAD(&vc4->debugfs_list);
 
+#ifndef CONFIG_DRM_V3D
 	if (!is_vc5) {
+#endif
 		ret = drmm_mutex_init(drm, &vc4->bin_bo_lock);
 		if (ret)
 			return ret;
@@ -351,17 +381,23 @@ static int vc4_drm_bind(struct device *dev)
 		ret = vc4_bo_cache_init(drm);
 		if (ret)
 			return ret;
+#ifndef CONFIG_DRM_V3D
 	}
+#endif
 
 	ret = drmm_mode_config_init(drm);
 	if (ret)
 		return ret;
 
+#ifndef CONFIG_DRM_V3D
 	if (!is_vc5) {
+#endif
 		ret = vc4_gem_init(drm);
 		if (ret)
 			return ret;
+#ifndef CONFIG_DRM_V3D
 	}
+#endif
 
 	node = of_find_compatible_node(NULL, NULL, "raspberrypi,bcm2835-firmware");
 	if (node) {
@@ -414,6 +450,7 @@ static int vc4_drm_bind(struct device *dev)
 		goto unbind_all;
 
 	drm_fbdev_generic_setup(drm, 16);
+	vc4_drm = drm;
 
 	return 0;
 
@@ -424,6 +461,9 @@ unbind_all:
 static void vc4_drm_unbind(struct device *dev)
 {
 	struct drm_device *drm = dev_get_drvdata(dev);
+
+	vc4_drm = NULL;
+	vc4_drm_file = NULL;
 
 	drm_dev_unplug(drm);
 	drm_atomic_helper_shutdown(drm);

@@ -1300,7 +1300,7 @@ int vc4_gem_init(struct drm_device *dev)
 {
 	struct vc4_dev *vc4 = to_vc4_dev(dev);
 	int ret;
-
+#ifndef CONFIG_DRM_V3D
 	if (WARN_ON_ONCE(vc4->is_vc5))
 		return -ENODEV;
 
@@ -1312,6 +1312,7 @@ int vc4_gem_init(struct drm_device *dev)
 	INIT_LIST_HEAD(&vc4->seqno_cb_list);
 	spin_lock_init(&vc4->job_lock);
 
+#endif
 	INIT_WORK(&vc4->hangcheck.reset_work, vc4_reset_work);
 	timer_setup(&vc4->hangcheck.timer, vc4_hangcheck_elapsed, 0);
 
@@ -1359,10 +1360,10 @@ int vc4_gem_madvise_ioctl(struct drm_device *dev, void *data,
 	struct drm_gem_object *gem_obj;
 	struct vc4_bo *bo;
 	int ret;
-
+/*
 	if (WARN_ON_ONCE(vc4->is_vc5))
 		return -ENODEV;
-
+*/
 	switch (args->madv) {
 	case VC4_MADV_DONTNEED:
 	case VC4_MADV_WILLNEED:

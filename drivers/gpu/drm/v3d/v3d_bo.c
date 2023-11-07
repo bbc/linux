@@ -24,6 +24,8 @@
 
 #include "v3d_drv.h"
 #include "uapi/drm/v3d_drm.h"
+#include "v3d_vc4_bind.h"
+#include "../drm_internal.h"
 
 /* Called DRM core on the last userspace/kernel unreference of the
  * BO.
@@ -173,9 +175,17 @@ int v3d_create_bo_ioctl(struct drm_device *dev, void *data,
 	struct v3d_bo *bo = NULL;
 	int ret;
 
-	if (args->flags != 0) {
+	if (args->flags != 0 && args->flags != ARC_CALLOC) {
 		DRM_INFO("unknown create_bo flags: %d\n", args->flags);
 		return -EINVAL;
+	}
+
+	if (is_vc4_enable() && args->flags == ARC_CALLOC) {
+		ret = import_bo_from_vc4(dev, file_priv, PAGE_ALIGN(args->size), &args->handle);
+		if (ret) {
+		DRM_ERROR("import_bo_from_vc4 error:%d\n", ret);
+		}
+		return ret;
 	}
 
 	bo = v3d_bo_create(dev, file_priv, PAGE_ALIGN(args->size));

@@ -21,6 +21,9 @@
 #include "uapi/drm/vc4_drm.h"
 #include "vc4_regs.h"
 
+#define CURSOR_TIMEOUT_MSEC 20
+#define V3D_BIND (1<<7)
+
 struct drm_device;
 struct drm_gem_object;
 
@@ -39,6 +42,7 @@ enum vc4_kernel_bo_type {
 	VC4_BO_TYPE_RCL,
 	VC4_BO_TYPE_BCL,
 	VC4_BO_TYPE_KERNEL_CACHE,
+  	VC4_BO_TYPE_V3D_BIND,
 	VC4_BO_TYPE_COUNT
 };
 

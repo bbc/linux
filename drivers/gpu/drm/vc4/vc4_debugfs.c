@@ -26,8 +26,8 @@ vc4_debugfs_init(struct drm_minor *minor)
 
 	drm_WARN_ON(drm, vc4_hvs_debugfs_init(minor));
 
+	drm_WARN_ON(drm, vc4_bo_debugfs_init(minor));
 	if (vc4->v3d) {
-		drm_WARN_ON(drm, vc4_bo_debugfs_init(minor));
 		drm_WARN_ON(drm, vc4_v3d_debugfs_init(minor));
 	}
 }
