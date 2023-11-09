@@ -834,6 +834,8 @@ int vc4_create_bo_ioctl(struct drm_device *dev, void *data,
 	return ret;
 }
 
+EXPORT_SYMBOL(vc4_create_bo_ioctl);
+
 int vc4_mmap_bo_ioctl(struct drm_device *dev, void *data,
 		      struct drm_file *file_priv)
 {
