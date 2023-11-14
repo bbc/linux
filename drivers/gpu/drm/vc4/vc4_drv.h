@@ -24,6 +24,10 @@
 #define CURSOR_TIMEOUT_MSEC 20
 #define V3D_BIND (1<<7)
 
+#ifndef CONFIG_DRM_V3D
+#define CONFIG_DRM_V3D 1
+#endif
+
 struct drm_device;
 struct drm_gem_object;
 
